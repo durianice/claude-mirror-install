@@ -55,7 +55,7 @@ install_palaude() {
 
     # 重命名解压后的目录
     mv $EXTRACT_DIR/palaude-linux-*/* $EXTRACT_DIR/
-    rm $EXTRACT_DIR/palaude-linux-*/
+    rm -r $EXTRACT_DIR/palaude-linux-*/
 
     # 设置可执行权限
     chmod +x $EXTRACT_DIR/palaude/palaude
