@@ -3,7 +3,7 @@
 # 检查并安装 jq
 if ! command -v jq &> /dev/null
 then
-    echo "jq 未安装. 正在安装 jq..."
+    echo "jq is not installed. Installing jq..."
     if [ -x "$(command -v apt-get)" ]; then
         sudo apt-get update && sudo apt-get install -y jq
     elif [ -x "$(command -v yum)" ]; then
@@ -11,7 +11,7 @@ then
     elif [ -x "$(command -v brew)" ]; then
         brew install jq
     else
-        echo "不支持的包管理器. 请手动安装 jq."
+        echo "Package manager not supported. Please install jq manually."
         exit 1
     fi
 fi
@@ -19,7 +19,7 @@ fi
 # 检查并安装 unzip
 if ! command -v unzip &> /dev/null
 then
-    echo "unzip 未安装. 正在安装 unzip..."
+    echo "unzip is not installed. Installing unzip..."
     if [ -x "$(command -v apt-get)" ]; then
         sudo apt-get update && sudo apt-get install -y unzip
     elif [ -x "$(command -v yum)" ]; then
@@ -27,7 +27,7 @@ then
     elif [ -x "$(command -v brew)" ]; then
         brew install unzip
     else
-        echo "不支持的包管理器. 请手动安装 unzip."
+        echo "Package manager not supported. Please install unzip manually."
         exit 1
     fi
 fi
@@ -48,10 +48,6 @@ EXTRACT_DIR="/opt/claude_mirror_workdir"
 PASSWORD="linux.do"
 SERVICE_NAME="claude_mirror"
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
-CRON_JOB="0 4 * * * /bin/bash $EXTRACT_DIR/update_claude_mirror.sh > /dev/null 2>&1"
-
-SCRIPT_NAME="claude-mirror-install.sh"
-SCRIPT_URL="https://raw.githubusercontent.com/durianice/claude-mirror-install/main/$SCRIPT_NAME"
 
 # 根据架构选择下载文件
 case $ARCH in
@@ -68,7 +64,7 @@ case $ARCH in
         ZIP_FILE=$(echo $RELEASE_DATA | jq -r '.assets[] | select(.name | contains("linux-arm64")) | .name')
         ;;
     *)
-        echo "不支持的架构: $ARCH"
+        echo "Unsupported architecture: $ARCH"
         exit 1
         ;;
 esac
@@ -76,29 +72,16 @@ esac
 # 获取本机IP地址
 LOCAL_IP=$(hostname -I | awk '{print $1}')
 
-# 下载最新脚本函数
-download_latest_script() {
-    local temp_script="/tmp/$SCRIPT_NAME"
-    if wget -q -O "$temp_script" "$SCRIPT_URL"; then
-        chmod +x "$temp_script"
-        echo "$temp_script"
-    else
-        echo ""
-    fi
-}
-
 # 菜单函数
 show_menu() {
-    echo "1. 安装"
-    echo "2. 启动"
-    echo "3. 停止"
-    echo "4. 重启"
-    echo "5. 查看状态"
-    echo "6. 卸载"
-    echo "7. 更新"
-    echo "8. 开启自动更新"
-    echo "9. 关闭自动更新"
-    echo "10. 退出"
+    echo "1. Install claude_mirror"
+    echo "2. Start claude_mirror"
+    echo "3. Stop claude_mirror"
+    echo "4. Restart claude_mirror"
+    echo "5. Status of claude_mirror"
+    echo "6. Uninstall claude_mirror"
+    echo "7. Update claude_mirror"
+    echo "8. Exit"
 }
 
 # 安装函数
@@ -124,7 +107,7 @@ install_claude_mirror() {
     # 查找可执行文件并设置可执行权限
     EXECUTABLE=$(find $EXTRACT_DIR -type f -executable -print -quit)
     if [ -z "$EXECUTABLE" ]; then
-        echo "在解压目录中未找到可执行文件."
+        echo "No executable file found in the extracted directory."
         exit 1
     fi
     chmod +x $EXECUTABLE
@@ -158,46 +141,25 @@ WantedBy=multi-user.target" > $SERVICE_FILE
     systemctl start $SERVICE_NAME
     systemctl enable $SERVICE_NAME
 
-    echo "服务 $SERVICE_NAME 已安装并启动."
-
-    # 创建更新脚本
-    cat > "$EXTRACT_DIR/update_claude_mirror.sh" << EOF
-#!/bin/bash
-SCRIPT_URL="$SCRIPT_URL"
-TEMP_SCRIPT="/tmp/$SCRIPT_NAME"
-
-# 下载最新脚本
-if wget -q -O "\$TEMP_SCRIPT" "\$SCRIPT_URL"; then
-    chmod +x "\$TEMP_SCRIPT"
-    "\$TEMP_SCRIPT" update
-else
-    echo "下载更新脚本失败，使用本地脚本更新。"
-    "$EXTRACT_DIR/$SCRIPT_NAME" update
-fi
-EOF
-    chmod +x "$EXTRACT_DIR/update_claude_mirror.sh"
-
-    # 复制当前脚本到安装目录
-    cp "$0" "$EXTRACT_DIR/$SCRIPT_NAME"
-    chmod +x "$EXTRACT_DIR/$SCRIPT_NAME"
+    echo "Service $SERVICE_NAME has been installed and started."
 }
 
 # 启动服务函数
 start_claude_mirror() {
     systemctl start $SERVICE_NAME
-    echo "服务 $SERVICE_NAME 已启动."
+    echo "Service $SERVICE_NAME started."
 }
 
 # 停止服务函数
 stop_claude_mirror() {
     systemctl stop $SERVICE_NAME
-    echo "服务 $SERVICE_NAME 已停止."
+    echo "Service $SERVICE_NAME stopped."
 }
 
 # 重启服务函数
 restart_claude_mirror() {
     systemctl restart $SERVICE_NAME
-    echo "服务 $SERVICE_NAME 已重启."
+    echo "Service $SERVICE_NAME restarted."
 }
 
 # 查看服务状态函数
@@ -207,40 +169,16 @@ status_claude_mirror() {
 
 # 更新函数
 update_claude_mirror() {
-    echo "正在更新 Claude Mirror..."
-    
     # 停止服务
     stop_claude_mirror
 
     # 下载并安装最新版本
-    local download_url="$BASE_URL/$ZIP_FILE"
-    local temp_zip="/tmp/$ZIP_FILE"
+    install_claude_mirror
 
-    if wget -q -O "$temp_zip" "$download_url"; then
-        unzip -o -P "$PASSWORD" "$temp_zip" -d "$EXTRACT_DIR"
-        rm "$temp_zip"
+    # 启动服务
+    start_claude_mirror
 
-        # 更新配置文件（如果需要）
-        if [ -f "$EXTRACT_DIR/config.json" ]; then
-            sed -i "s/127.0.0.1/$LOCAL_IP/" "$EXTRACT_DIR/config.json"
-        fi
-
-        # 更新可执行文件权限
-        EXECUTABLE=$(find "$EXTRACT_DIR" -type f -executable -print -quit)
-        if [ -n "$EXECUTABLE" ]; then
-            chmod +x "$EXECUTABLE"
-        else
-            echo "警告: 未找到可执行文件"
-        fi
-
-        # 启动服务
-        start_claude_mirror
-
-        echo "Claude Mirror 已更新并重启."
-    else
-        echo "下载更新失败，保持当前版本。"
-        start_claude_mirror
-    fi
+    echo "Service $SERVICE_NAME has been updated and restarted."
 }
 
 # 卸载函数
@@ -250,69 +188,40 @@ uninstall_claude_mirror() {
     rm $SERVICE_FILE
     systemctl daemon-reload
     rm -rf $EXTRACT_DIR
-    echo "服务 $SERVICE_NAME 已卸载."
-}
-
-# 开启自动更新函数
-enable_auto_update() {
-    (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
-    echo "自动更新已开启. claude_mirror 将在每天凌晨4点自动更新."
-}
-
-# 关闭自动更新函数
-disable_auto_update() {
-    crontab -l | grep -v "$CRON_JOB" | crontab -
-    echo "自动更新已关闭."
+    echo "Service $SERVICE_NAME has been uninstalled."
 }
 
 # 主程序
-if [ "$1" = "update" ]; then
-    update_claude_mirror
-    exit 0
-fi
-
-if [ "$0" = "/dev/stdin" ] || [ "$0" = "sh" ]; then
-    # 脚本通过远程执行方式运行
-    install_claude_mirror
-else
-    # 脚本作为本地文件执行
-    while true; do
-        show_menu
-        read -p "请选择一个选项: " choice
-        case $choice in
-            1)
-                install_claude_mirror
-                ;;
-            2)
-                start_claude_mirror
-                ;;
-            3)
-                stop_claude_mirror
-                ;;
-            4)
-                restart_claude_mirror
-                ;;
-            5)
-                status_claude_mirror
-                ;;
-            6)
-                uninstall_claude_mirror
-                ;;
-            7)
-                update_claude_mirror
-                ;;
-            8)
-                enable_auto_update
-                ;;
-            9)
-                disable_auto_update
-                ;;
-            10)
-                exit 0
-                ;;
-            *)
-                echo "无效选项. 请重试."
-                ;;
-        esac
-    done
-fi
+while true; do
+    show_menu
+    read -p "Please select an option: " choice
+    case $choice in
+        1)
+            install_claude_mirror
+            ;;
+        2)
+            start_claude_mirror
+            ;;
+        3)
+            stop_claude_mirror
+            ;;
+        4)
+            restart_claude_mirror
+            ;;
+        5)
+            status_claude_mirror
+            ;;
+        6)
+            uninstall_claude_mirror
+            ;;
+        7)
+            update_claude_mirror
+            ;;
+        8)
+            exit 0
+            ;;
+        *)
+            echo "Invalid option. Please try again."
+            ;;
+    esac
+done
