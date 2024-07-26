@@ -3,7 +3,7 @@
 # 检查并安装 jq
 if ! command -v jq &> /dev/null
 then
-    echo "jq is not installed. Installing jq..."
+    echo "jq 未安装. 正在安装 jq..."
     if [ -x "$(command -v apt-get)" ]; then
         sudo apt-get update && sudo apt-get install -y jq
     elif [ -x "$(command -v yum)" ]; then
@@ -11,7 +11,7 @@ then
     elif [ -x "$(command -v brew)" ]; then
         brew install jq
     else
-        echo "Package manager not supported. Please install jq manually."
+        echo "不支持的包管理器. 请手动安装 jq."
         exit 1
     fi
 fi
@@ -19,7 +19,7 @@ fi
 # 检查并安装 unzip
 if ! command -v unzip &> /dev/null
 then
-    echo "unzip is not installed. Installing unzip..."
+    echo "unzip 未安装. 正在安装 unzip..."
     if [ -x "$(command -v apt-get)" ]; then
         sudo apt-get update && sudo apt-get install -y unzip
     elif [ -x "$(command -v yum)" ]; then
@@ -27,7 +27,7 @@ then
     elif [ -x "$(command -v brew)" ]; then
         brew install unzip
     else
-        echo "Package manager not supported. Please install unzip manually."
+        echo "不支持的包管理器. 请手动安装 unzip."
         exit 1
     fi
 fi
@@ -44,10 +44,11 @@ LATEST_TAG=$(echo $RELEASE_DATA | jq -r .tag_name)
 BASE_URL="https://github.com/$REPO/releases/download/$LATEST_TAG"
 ARCH=$(uname -m)
 ZIP_FILE=""
-EXTRACT_DIR="/opt/palaude_workdir"
+EXTRACT_DIR="/opt/claude_mirror_workdir"
 PASSWORD="linux.do"
-SERVICE_NAME="palaude"
+SERVICE_NAME="claude_mirror"
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
+CRON_JOB="0 4 * * * /bin/bash $EXTRACT_DIR/update_claude_mirror.sh > /dev/null 2>&1"
 
 # 根据架构选择下载文件
 case $ARCH in
@@ -64,7 +65,7 @@ case $ARCH in
         ZIP_FILE=$(echo $RELEASE_DATA | jq -r '.assets[] | select(.name | contains("linux-arm64")) | .name')
         ;;
     *)
-        echo "Unsupported architecture: $ARCH"
+        echo "不支持的架构: $ARCH"
         exit 1
         ;;
 esac
@@ -74,18 +75,20 @@ LOCAL_IP=$(hostname -I | awk '{print $1}')
 
 # 菜单函数
 show_menu() {
-    echo "1. Install Palaude"
-    echo "2. Start Palaude"
-    echo "3. Stop Palaude"
-    echo "4. Restart Palaude"
-    echo "5. Status of Palaude"
-    echo "6. Uninstall Palaude"
-    echo "7. Update Palaude"
-    echo "8. Exit"
+    echo "1. 安装"
+    echo "2. 启动"
+    echo "3. 停止"
+    echo "4. 重启"
+    echo "5. 查看状态"
+    echo "6. 卸载"
+    echo "7. 更新"
+    echo "8. 开启自动更新"
+    echo "9. 关闭自动更新"
+    echo "10. 退出"
 }
 
 # 安装函数
-install_palaude() {
+install_claude_mirror() {
     DOWNLOAD_URL="$BASE_URL/$ZIP_FILE"
 
     # 下载文件
@@ -107,7 +110,7 @@ install_palaude() {
     # 查找可执行文件并设置可执行权限
     EXECUTABLE=$(find $EXTRACT_DIR -type f -executable -print -quit)
     if [ -z "$EXECUTABLE" ]; then
-        echo "No executable file found in the extracted directory."
+        echo "在解压目录中未找到可执行文件."
         exit 1
     fi
     chmod +x $EXECUTABLE
@@ -120,7 +123,7 @@ install_palaude() {
 
     # 创建systemd服务文件
     echo "[Unit]
-Description=Palaude Service
+Description=claude_mirror Service
 After=network.target
 
 [Service]
@@ -141,87 +144,110 @@ WantedBy=multi-user.target" > $SERVICE_FILE
     systemctl start $SERVICE_NAME
     systemctl enable $SERVICE_NAME
 
-    echo "Service $SERVICE_NAME has been installed and started."
+    echo "服务 $SERVICE_NAME 已安装并启动."
+
+    # 创建更新脚本
+    echo "#!/bin/bash
+$EXTRACT_DIR/$(basename $0) 7" > $EXTRACT_DIR/update_claude_mirror.sh
+    chmod +x $EXTRACT_DIR/update_claude_mirror.sh
 }
 
 # 启动服务函数
-start_palaude() {
+start_claude_mirror() {
     systemctl start $SERVICE_NAME
-    echo "Service $SERVICE_NAME started."
+    echo "服务 $SERVICE_NAME 已启动."
 }
 
 # 停止服务函数
-stop_palaude() {
+stop_claude_mirror() {
     systemctl stop $SERVICE_NAME
-    echo "Service $SERVICE_NAME stopped."
+    echo "服务 $SERVICE_NAME 已停止."
 }
 
 # 重启服务函数
-restart_palaude() {
+restart_claude_mirror() {
     systemctl restart $SERVICE_NAME
-    echo "Service $SERVICE_NAME restarted."
+    echo "服务 $SERVICE_NAME 已重启."
 }
 
 # 查看服务状态函数
-status_palaude() {
+status_claude_mirror() {
     systemctl status $SERVICE_NAME
 }
 
 # 更新函数
-update_palaude() {
+update_claude_mirror() {
     # 停止服务
-    stop_palaude
+    stop_claude_mirror
 
     # 下载并安装最新版本
-    install_palaude
+    install_claude_mirror
 
     # 启动服务
-    start_palaude
+    start_claude_mirror
 
-    echo "Service $SERVICE_NAME has been updated and restarted."
+    echo "服务 $SERVICE_NAME 已更新并重启."
 }
 
 # 卸载函数
-uninstall_palaude() {
+uninstall_claude_mirror() {
     systemctl stop $SERVICE_NAME
     systemctl disable $SERVICE_NAME
     rm $SERVICE_FILE
     systemctl daemon-reload
     rm -rf $EXTRACT_DIR
-    echo "Service $SERVICE_NAME has been uninstalled."
+    echo "服务 $SERVICE_NAME 已卸载."
+}
+
+# 开启自动更新函数
+enable_auto_update() {
+    (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
+    echo "自动更新已开启. claude_mirror 将在每天凌晨4点自动更新."
+}
+
+# 关闭自动更新函数
+disable_auto_update() {
+    crontab -l | grep -v "$CRON_JOB" | crontab -
+    echo "自动更新已关闭."
 }
 
 # 主程序
 while true; do
     show_menu
-    read -p "Please select an option: " choice
+    read -p "请选择一个选项: " choice
     case $choice in
         1)
-            install_palaude
+            install_claude_mirror
             ;;
         2)
-            start_palaude
+            start_claude_mirror
             ;;
         3)
-            stop_palaude
+            stop_claude_mirror
             ;;
         4)
-            restart_palaude
+            restart_claude_mirror
             ;;
         5)
-            status_palaude
+            status_claude_mirror
             ;;
         6)
-            uninstall_palaude
+            uninstall_claude_mirror
             ;;
         7)
-            update_palaude
+            update_claude_mirror
             ;;
         8)
+            enable_auto_update
+            ;;
+        9)
+            disable_auto_update
+            ;;
+        10)
             exit 0
             ;;
         *)
-            echo "Invalid option. Please try again."
+            echo "无效选项. 请重试."
             ;;
     esac
 done
