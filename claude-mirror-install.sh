@@ -74,13 +74,13 @@ LOCAL_IP=$(hostname -I | awk '{print $1}')
 
 # 菜单函数
 show_menu() {
-    echo "1. Install claude_mirror"
-    echo "2. Start claude_mirror"
-    echo "3. Stop claude_mirror"
-    echo "4. Restart claude_mirror"
-    echo "5. Status of claude_mirror"
-    echo "6. Uninstall claude_mirror"
-    echo "7. Update claude_mirror"
+    echo "1. 安装"
+    echo "2. 启动"
+    echo "3. 停止"
+    echo "4. 重启"
+    echo "5. 状态"
+    echo "6. 卸载"
+    echo "7. 更新"
     echo "8. Exit"
 }
 
